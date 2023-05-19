@@ -1,0 +1,143 @@
+---
+title: "Machine learning - Assingment 4"
+author: "Felipe Wolff"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Executive summary
+
+This article is the final report for Practical Machine Learning course, as part of the Data Science Specialization track offered by John Hopkins, in Coursera website.
+This project use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to predict the manner in which they did the exercise. This is the “classe” variable in the training set. We train 4 models: Decision Tree, Random Forest, Gradient Boosted Trees, Support Vector Machine using k-folds cross validation on the training set. We then predict using a validation set randomly selected from the training csv data to obtain the accuracy and out of sample error rate. In this project, we will use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to predict the manner in which they did the exercise.  
+
+# Library  
+```{r, cache = TRUE,results='hide'}
+library(lattice)
+library(ggplot2)
+library(caret)
+library(kernlab)
+library(rattle)
+library(corrplot)
+set.seed(1234)
+```
+# Getting and cleaning data
+## Download the Data
+```{r, cache = TRUE}
+trainUrl <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+trainFile <- "./data/pml-training.csv"
+testFile  <- "./data/pml-testing.csv"
+if (!file.exists("./data")) {
+  dir.create("./data")
+}
+if (!file.exists(trainFile)) {
+  download.file(trainUrl, destfile=trainFile, method="curl")
+}
+if (!file.exists(testFile)) {
+  download.file(testUrl, destfile=testFile, method="curl")
+}
+```  
+## Read and cleaning the Data
+After downloading the data from the data source, we can read the two csv files into two data frames.  
+```{r read, cache = TRUE, echo=TRUE}
+train_set <- read.csv("./data/pml-training.csv")
+test_set <- read.csv("./data/pml-testing.csv")
+dim(train_set)
+dim(test_set)
+```
+Removing NA variables and other unnecessary metadata
+```{r clean, cache = TRUE}
+train_set <- train_set[,colMeans(is.na(train_set))< .9]
+train_set <- train_set[, -c(1:7)]
+dim(train_set)
+```
+Removing Near Zero Variance:
+```{r nzv, cache = TRUE}
+zv <- nearZeroVar(train_set)
+train_set <- train_set[,-zv]
+dim(train_set)
+```
+Now, we can split the data in Validation and training sets. 
+```{r train, cache= TRUE, echo = TRUE}
+training <- createDataPartition(y=train_set$classe, p=0.7, list=F)
+train <- train_set[training,]
+validation <- train_set[-training,]
+```
+
+# Creation and test the models
+Here we will use these models to test: SVM, Decision trees, Random forest and Gradient boosted trees. These with the purpose of comparison among them.
+We will set up the control with 3-fold cross validation.
+```{r control 3fcv, echo = TRUE}
+ctrl <- trainControl(method="cv", number=3, verboseIter=F)
+
+```
+## Support Vector Machine
+```{r svm, echo = TRUE}
+mod_svm <- train(classe~., data = train, method="svmLinear",
+                 trControl= ctrl, tuneLength = 5, verbose=F)
+pred_svm <- predict(mod_svm, validation)
+conf_matrix <- confusionMatrix(pred_svm, factor(validation$classe))
+conf_matrix
+```
+## Decision Tree
+```{r dt, echo = TRUE}
+mod_dtrees <- train(classe~., data=train, method="rpart", 
+                    trControl= ctrl, tuneLength = 5)
+fancyRpartPlot(mod_dtrees$finalModel)
+```
+*Predictions*
+```{r d trees pred, echo =TRUE}
+pred_dtrees <- predict(mod_dtrees, validation)
+conf_mdtrees <- confusionMatrix(pred_dtrees, factor(validation$classe))
+conf_mdtrees
+```
+## Random Forest
+```{r rf, echo = TRUE}
+model_rf <- train(classe~.,data=train, method="rf", trControl=ctrl,
+                  tuneLength = 5)
+pred_rf <- predict(model_rf, validation)
+conf_mrf <- confusionMatrix(pred_rf, factor(validation$classe))
+conf_mrf
+```
+## Gradient Boosted Trees
+```{r gbt, echo = TRUE}
+model_gbt <- train(classe~., data= train, method="gbm",trControl=ctrl,
+                  tuneLength=5, verbose=F)
+pred_gbt <- predict(model_gbt, validation)
+conf_mgbt <- confusionMatrix(pred_gbt, factor(validation$classe))
+conf_mgbt
+```
+# Results
+```{r results, echo=FALSE}
+model <- c("SVM", "DTree", "RandFor", "GBT")
+accuracy <- c(0.7782,0.5431,0.9952,0.9908)
+ooserror <- c(1-0.7782, 1-0.5431,1-0.9952,1-0.9908)
+results <- data.frame(model, accuracy,ooserror)
+results
+
+```
+The modelthat fit the best accuracy is Random forest, with a accuracy value of 0.9952, and a out os sample error around of 0.0048, so this will be the model that we use for the test.
+# Prediction on test set
+I will run the test set to predict the classe outcome for 20 cases with the Random forest model described before.
+```{r prediction, echo = TRUE}
+pred_rf <- predict(model_rf, test_set)
+pred_rf
+```
+# Appendix
+correlation matrix in training set
+```{r correlation matrix, echo = TRUE}
+corr_plot <- cor(train[,-length(names(train))])
+corrplot(corr_plot, method = "color")
+
+```
+
+
+
+
+
+
+
